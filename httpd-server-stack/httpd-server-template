@@ -1,0 +1,102 @@
+---
+## Author: Piotr Wrona
+## version: 1
+## httpd-server-stack
+AWSTemplateFormatVersion: 2010-09-09
+
+###########
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.nano
+      - t3.micro
+      - t2.nano
+  InstanceKeyParameter:
+    Type: String
+    Default: httpdSeverKey
+  InstanceImageID:
+    Type: String
+    Default: ami-0dcc0ebde7b2e00db
+  DefaultVPCId:
+    Type: String
+    Default: vpc-0b6a1580c190cbccb  
+
+##########
+Resources:
+
+  HttpdServerSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref DefaultVPCId
+      GroupDescription: Configuration for httpd server.
+      GroupName: HttpdServerSG
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: '80'
+          ToPort: '80'
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          FromPort: '443'
+          ToPort: '443'
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          FromPort: '1024'
+          ToPort: '65535'
+          IpProtocol: tcp
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: '80'
+          ToPort: '80'
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          FromPort: '443'
+          ToPort: '443'
+          IpProtocol: tcp
+
+  Ec2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties: 
+      AvailabilityZone: eu-central-1a
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref InstanceKeyParameter
+      ImageId: !Ref InstanceImageID   
+      SecurityGroupIds: 
+        - !GetAtt "HttpdServerSG.GroupId"
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            yum update -y
+            amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+            yum install -y httpd mariadb-server
+            systemctl start httpd
+            systemctl enable httpd
+            usermod -a -G apache ec2-user
+            chown -R ec2-user:apache /var/www
+            chmod 2775 /var/www
+            find /var/www -type d -exec chmod 2775 {} \;
+            find /var/www -type f -exec chmod 0664 {} \;
+            echo "<?php phpinfo(); ?>" > /var/www/html/phpinfo.php
+        
+  
+  ElasticIP:
+    Type: 'AWS::EC2::EIP'
+    Properties: 
+      InstanceId: !Ref Ec2Instance
+
+########
+Outputs:
+    InstanceId:
+      Description: Id of created instance
+      Value: !Ref Ec2Instance
+    ElasticIP:
+      Description: Elastic ip address assigned
+      Value: !Ref ElasticIP
+    WebsiteURL:
+      Description: Endpoint for https server
+      Value: !Sub "http://${Ec2Instance.PublicDnsName}"
+
+
