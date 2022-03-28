@@ -1,0 +1,164 @@
+---
+## Author: Piotr Wrona
+## version: 1
+## sample-vpc-template
+AWSTemplateFormatVersion: 2010-09-09
+
+
+##########
+Resources:
+  
+  Vpc1:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: Vpc1
+
+### SUBNETS ###
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-central-1a
+      CidrBlock: 10.0.5.0/24
+      Tags: 
+        - Key: Name
+          Value: PublicSubnet1
+      VpcId: !Ref Vpc1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: eu-central-1b
+      CidrBlock: 10.0.10.0/24
+      Tags: 
+        - Key: Name
+          Value: PublicSubnet2
+      VpcId: !Ref Vpc1
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-central-1a
+      CidrBlock: 10.0.15.0/24
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+      VpcId: !Ref Vpc1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: eu-central-1b
+      CidrBlock: 10.0.20.0/24
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+      VpcId: !Ref Vpc1
+
+### NAT GATEWAY ###
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: NAT-GW
+
+### INTERNET GATEWAY ###
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: IG
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc1
+
+### ROUTES ####
+
+  ### PUBLIC ###
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc1 
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId:  !Ref PublicSubnet1
+  
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId:  !Ref PublicSubnet2
+
+  ### PRIVATE ###
+  
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc1
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId:  !Ref PrivateSubnet1
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId:  !Ref PrivateSubnet2
+
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    Properties: 
+      Tags:
+        - Key: Name
+          Value: NatElasticIp
+
+
+
+# Description:
+# VPC with CIDR 10.0.0.0/16 
+# Two public subnets 
+# Two private subnets 
+# NAT Gateway
+# Internet Gateway
+# Public route table for public subnets with traffic routing via Internet gateway
+# Private route table for private subnets with traffic routing via NAT gateway
+# Elastic IP attached to NAT gateway
